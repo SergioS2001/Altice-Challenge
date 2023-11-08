@@ -2,231 +2,184 @@ import java.sql.Timestamp;
 import java.util.Date;
 import java.time.LocalDateTime;
 
-public class BillingAccount{
+public abstract class BillingAccount implements TariffCalculationStategy {
     String MSISDN;
-    int Bucket1;
-    int Bucket2;
-    int Bucket3;
+    int bucket1;
+    int bucket2;
+    int bucket3;
 
-    int CounterA;
-    int CounterB;
-    int CounterC;
-    Date CounterD;
+    int counterA; //contagem de SU's do Serviço A
+    int counterB; //contagem do numero de pedidos do Serviço B, sob tarifário Beta1
+    int counterC;//contagem de requisições em roaming
+    Date counterD;//registro da data da ultima requisição feita
 
-    String [] TarifarioServicoA = {"Alpha1", "Alpha2", "Alpha3"};
+    String[] tarifarioServicoA = {"Alpha1", "Alpha2", "Alpha3"};
 
-    String [] TarifarioServicoB = {"Beta1", "Beta2", "Beta3"};
+    String[] tarifarioServicoB = {"Beta1", "Beta2", "Beta3"};
+
+    /**Strategy Configuration**/
+    static TariffCalculationStategy alpha1Strategy = new Alpha1CalculationStrategy();
+    static CalculationContext contextA1 = new CalculationContext(alpha1Strategy);
+    static TariffCalculationStategy alpha2Strategy = new Alpha2CalculationStrategy();
+    static CalculationContext contextA2 = new CalculationContext(alpha2Strategy);
+    static TariffCalculationStategy alpha3Strategy = new Alpha3CalculationStrategy();
+    static CalculationContext contextA3 = new CalculationContext(alpha3Strategy);
+
+    static TariffCalculationStategy beta1Strategy = new Beta1CalculationStrategy();
+    static CalculationContext contextB1 = new CalculationContext(beta1Strategy);
+    static TariffCalculationStategy beta2Strategy = new Beta2CalculationStrategy();
+    static CalculationContext contextB2 = new CalculationContext(beta2Strategy);
+    static TariffCalculationStategy beta3Strategy = new Beta3CalculationStrategy();
+    static CalculationContext contextB3 = new CalculationContext(beta3Strategy);
+
 
     public BillingAccount(String MSISDN, int bucket1, int bucket2, int bucket3, int counterA, int counterB, int counterC, Date counterD) {
-        super();
         this.MSISDN = MSISDN;
-        Bucket1 = bucket1;
-        Bucket2 = bucket2;
-        Bucket3 = bucket3;
-        CounterA = counterA;
-        CounterB = counterB;
-        CounterC = counterC;
-        CounterD = counterD;
-      //  TarifarioServicoA = tarifarioServicoA;
-      //  TarifarioServicoB = tarifarioServicoB;
+        this.bucket1 = bucket1;
+        this.bucket2 = bucket2;
+        this.bucket3 = bucket3;
+        this.counterA = counterA;
+        this.counterB = counterB;
+        this.counterC = counterC;
+        this.counterD = counterD;
+
+    }
+
+    /**
+     * Verify which Service was selected by the User
+     * @param request
+     * @param billingAccount
+     */
+    public static void VerificationOfService(ChargingRequest request, BillingAccount billingAccount) {
+        char Service = request.service;
+        System.out.println(Service);
+       if (Service == 'A') {
+           ServiceA(request, billingAccount);
+       }
+       else if(Service == 'B') {
+           ServiceB(request, billingAccount);
+       }
+    }
+
+    /**
+     * Inisde Service A, it will decide which Tariff is eligable and the various constraints
+     * Switch Case to decide which strategy will be implemented
+     * @param request
+     * @param billingAccount
+     */
+    public static void ServiceA(ChargingRequest request, BillingAccount billingAccount) {
+        billingAccount.counterA = request.RSU;
+        boolean roaming = request.roaming;
+        String tariff = "";
+
+        // Determine which tariff to use
+        if (!roaming && billingAccount.bucket2 > 10) {
+            tariff = billingAccount.tarifarioServicoA[1]; // Alpha2
+        } if (IsWeekDay(request) && billingAccount.counterA < 100) {
+            tariff = billingAccount.tarifarioServicoA[0]; // Alpha1
+        } else if (roaming && billingAccount.bucket3 > 10) {
+            tariff = billingAccount.tarifarioServicoA[2]; // Alpha3
+        }
+
+        // Depending on the chosen tariff, execute the corresponding method
+        switch (tariff) {
+            case "Alpha1" -> {
+                System.out.println("Entered alfa1");
+                contextA1.ExecuteCalculation(request, billingAccount);
+            }
+            case "Alpha2" -> {
+                System.out.println("Entered alfa2");
+                contextA2.ExecuteCalculation(request, billingAccount);
+            }
+            case "Alpha3" -> {
+                System.out.println("Entered alfa3");
+                contextA3.ExecuteCalculation(request, billingAccount);
+            }
+            default -> System.out.println("ServiceA -Error  in Alpha");
+        }
     }
 
 
-    /**2 isso vai passar para a billing account, recebe essa instancia e vai fazer as suas verificacoes e ver em que tipo de servico, dentro do A ou B ele vai ficar**/
+    /**
+     * Inisde Service B, it will decide which Tariff is eligable and the various constraints
+     * Switch Case to decide which strategy will be implemented
+     * @param request
+     * @param billingAccount
+     */
+    public static void ServiceB(ChargingRequest request, BillingAccount billingAccount) {
+        billingAccount.counterA = request.RSU;
+        boolean roaming = request.roaming;
+        String tariff = "";
 
-     public void VerificationOfService(ChargingRequest request){
-         char Service = request.Service;
+        // Determine which tariff to use
+        if (IsWeekDay(request) && IsNightHours(request)) {
+            tariff = billingAccount.tarifarioServicoB[0]; // Beta1
+        } else   if (!roaming) {
+            tariff = billingAccount.tarifarioServicoB[1]; // Beta2
+        } else{
+            tariff = billingAccount.tarifarioServicoB[2]; // Beta3
+        }
 
-         if (Service == 'A'){
-             ServiceA(request);
-         }
-         else{
-             ServiceB(request);
-         }
-     }
+
+        // Depending on the chosen tariff, execute the corresponding method
+        switch (tariff) {
+            case "Beta1" -> {
+                System.out.println("Entered Beta1");
+                contextB1.ExecuteCalculation(request, billingAccount);
+            }
+            case "Beta2" -> {
+                System.out.println("Entered Beta2");
+                contextB2.ExecuteCalculation(request, billingAccount);
+            }
+            case "Beta3" -> {
+                System.out.println("Entered Beta3");
+                contextB3.ExecuteCalculation(request, billingAccount);
+            }
+            default -> System.out.println("ServiceB -Error in Beta");
+        }
+    }
 
     /**
-     *
-     * counterA - contagem de SU's do Serviço A;
-     * o counterB - contagem do numero de pedidos do Serviço B, sob tarifário Beta1;
-     * o counterC- contagem de requisições em roaming
-     * o counterD- registro da data da ultima requisição feita
+     * Aux Function to help in the constraints in each Service
+     * Checks if the timestamp is at night time, after 8pm until 6am
+     * @param request
+     * @return
      */
-
-     public int ServiceA(ChargingRequest request){
-         String MSISND = request.MSISDN;
-         CounterA = request.RSU;
-         Timestamp time = request.TimeStamp;
-         LocalDateTime LocalTime = time.toLocalDateTime();
-         int DayOfWeek = LocalTime.getDayOfWeek().getValue();
-         int Hours = LocalTime.getHour();
-         boolean Roaming = request.Roaming;
-
-         //alpha 1
-         if(CounterA < 100){
-             //if para verificar que so da aos dias da semana
-             if(DayOfWeek >= 1 && DayOfWeek<=5){
-
-                 if (Roaming){
-                     CounterC+=2;
-                 }
-                 if (Hours >= 20 || Hours <= 6){
-                     CounterA +=0.5;
-                 }
-
-                 CounterA += 1;
-
-                 if(CounterA < 10){
-                     CounterA-=0.25;
-                 }
-                 if (CounterC<50){
-                     CounterC -=0.1;
-                 }
-
-                 System.out.println("The type of Service is Alpha 1");
-                 System.out.println("The bucket that will be charged");
-
-                  if (Roaming){
-                      System.out.println("Bucket B");
-                  }
-                  else if(Roaming && CounterC > 5){
-                      System.out.println("Bucket B");
-                  }
-                  else {
-                      System.out.println("Bucket A");
-                  }
-             }
-         }
-         //alpha2
-         if(Bucket2 < 10 || Roaming){
-             System.out.println("Invalid for Alpha 2");
-             return -1;
-         }
-         else{
-             if (Hours >= 20 || Hours <= 6){
-                 CounterA +=0.25;
-             }
-             if (CounterB > 10){
-                 CounterA -=0.5;
-             }
-             if (Bucket2 > 15){
-                 CounterA -=0.05;
-             }
-             CounterA+=0.5;
-             //verificar como posso fazer para que o pagamento seja apenas no bucket2
-             System.out.println("Value charged in Bucket2");
-         }
-
-         //alpha3
-         if(Roaming && Bucket3 > 10){
-
-             if(DayOfWeek > 5 && DayOfWeek < 7){
-                 CounterA += 0.25;
-             }
-             if(CounterB > 10){
-                 CounterA -=0.2;
-             }
-             if(CounterB > 15){
-                 CounterA -=0.05;
-             }
-             //pagamento apenas no bucket3
-         }
-
-         //retornar o pagamento
-         return 0;
-     }
-
+    public static boolean IsNightHours(ChargingRequest request) {
+        Timestamp time = request.timeStamp;
+        LocalDateTime LocalTime = time.toLocalDateTime();
+        int Hours = LocalTime.getHour();
+        return Hours >= 20 && Hours <= 6;
+    }
 
     /**
-     *
-     * counterA - contagem de SU's do Serviço A;
-     * o counterB - contagem do numero de pedidos do Serviço B, sob tarifário Beta1;
-     * o counterC- contagem de requisições em roaming
-     * o counterD- registro da data da ultima requisição feita
+     * Aux Function to help in the constraints in each Service
+     * Checks if the timestamp is on a Week Day or Weekend
+     * @param request
+     * @return
      */
+    public static boolean IsWeekDay(ChargingRequest request) {
+        Timestamp time = request.timeStamp;
+        LocalDateTime LocalTime = time.toLocalDateTime();
+        int DayOfWeek = LocalTime.getDayOfWeek().getValue();
+        return DayOfWeek >= 1 && DayOfWeek <= 5;
+    }
 
 
-     public int ServiceB(ChargingRequest request){
-         String MSISND = request.MSISDN;
-         CounterA = request.RSU;
-         Timestamp time = request.TimeStamp;
-         LocalDateTime LocalTime = time.toLocalDateTime();
-         int DayOfWeek = LocalTime.getDayOfWeek().getValue();
-         int Hours = LocalTime.getHour();
-         boolean Roaming = request.Roaming;
+    public static class CreateBillingAccount extends BillingAccount {
+        public CreateBillingAccount(String MSISDN, int bucket1, int bucket2, int bucket3, int counterA, int counterB, int counterC, Date counterD) {
+            super(MSISDN, bucket1, bucket2, bucket3, counterA, counterB, counterC, counterD);
+        }
 
-         //beta 1
-         if(DayOfWeek >= 1 && DayOfWeek<=5 || DayOfWeek >= 6 && Hours >=20 && Hours <= 6)
-         {
+        public static void main(String[] args) {
+            ChargingRequest request = ChargingRequest.CreateNewChargingRequest();
+            CreateBillingAccount billingAccount = new CreateBillingAccount("123456", 10, 10, 10, 10, 0, 0, request.timeStamp);
+            VerificationOfService(request, billingAccount);
+        }
 
-             if (Roaming){
-                 CounterC+=0.2;
-             }
-             if(Hours >= 20 && Hours <= 6){
-                 CounterB+=0.05;
-             }
-             CounterB+=0.1;
-
-             if(CounterA > 10){
-                 CounterB-=0.025;
-             }
-             if(Bucket3 > 50){
-                 CounterB-=0.01;
-             }
-             if (Roaming){
-                 System.out.println("Debit in bucket3");
-             }
-             if(Roaming && CounterB>5){
-                 System.out.println("Debit in bucket2");
-             }
-             System.out.println("Debit in bucketA");
-         }
-
-         //beta2
-         if(Roaming || Bucket2 > 10) {
-             System.out.println("Invalid for beta2");
-         }else{
-
-             if(Hours >= 20 && Hours <= 6){
-                 CounterB+=0.025;
-             }
-             CounterB+=0.05;
-
-             if(CounterB > 10){
-                 CounterB-=0.02;
-             }
-             if(Bucket2 > 15){
-                 CounterB-=0.05;
-             }
-             //apenas pode debitar no bucket2 ou rejeita
-             System.out.println("Debit in bucketB");
-         }
-
-         //beta3
-         if(Roaming == false || Bucket3 > 10) {
-             System.out.println("Invalid for beta2");
-         }else{
-
-             if(Hours >= 20 && Hours <= 6){
-                 CounterB+=0.025;
-             }
-             CounterB+=0.1;
-
-             if(CounterB > 10){
-                 CounterB-=0.02;
-             }
-             if(Bucket2 > 15){
-                 CounterB-=0.05;
-             }
-             //apenas pode debitar no bucket3 ou rejeita
-             System.out.println("Debit in bucketC");
-         }
-
-        //no fim retornar um valor de pagamento
-        return 0;
-     }
-
-    public static void main(String[] args) {
-
+        @Override
+        public int calculate(ChargingRequest request, BillingAccount billingAccount) {
+            return 0;
+        }
     }
 }

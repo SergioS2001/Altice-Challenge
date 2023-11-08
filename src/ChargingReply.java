@@ -1,11 +1,11 @@
 public class ChargingReply {
-    String RequestID;
-    String Result;
+    String requestID;
+    String result;
     int GSU;
 
     public ChargingReply(String requestID, String result, int GSU) {
-        RequestID = requestID;
-        Result = result;
+        this.requestID = requestID;
+        this.result = result;
         this.GSU = GSU;
     }
 
@@ -13,10 +13,9 @@ public class ChargingReply {
 
     }
 
-    public void ValueToPay(BillingAccount bill){}
 
-    public void PrintResult(String Result){
-        switch (Result) {
+    public void PrintResult(String result){
+        switch (result) {
             case "OK" -> System.out.println("Result - OK");
             case "CreditLimitReached" -> System.out.println("Result - CreditLimitReached");
             case "NonElegible" -> System.out.println("Result - NonElegible");
